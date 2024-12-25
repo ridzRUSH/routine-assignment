@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  user_id           Int                 @id @default(autoincrement())
+  name              String
+  email             String              @unique
+  password          String
+  role              String              @default("normal") // Can be "admin" or "normal"
+  created_at        DateTime            @default(now())
+  updated_at        DateTime            @updatedAt
+  RoutineEngagement RoutineEngagement[]
+}
+
+model Routine {
+  routine_id     Int                 @id @default(autoincrement())
+  name           String
+  description    String
+  duration_weeks Int
+  created_at     DateTime            @default(now())
+  updated_at     DateTime            @updatedAt
+  milestones     RoutineMilestone[]
+  steps          RoutineStep[]
+  engagements    RoutineEngagement[]
+  analytics      Analytics?
+  dailyEvents    DailyEvent[] // Add this field for the relation with DailyEvent
+}
+
+model RoutineMilestone {
+  milestone_id Int      @id @default(autoincrement())
+  routine_id   Int
+  week_number  Int
+  benefit      String
+  created_at   DateTime @default(now())
+
+  routine Routine @relation(fields: [routine_id], references: [routine_id])
+}
+
+model RoutineStep {
+  step_id       Int      @id @default(autoincrement())
+  routine_id    Int
+  step_number   Int
+  action        String
+  optional_tips String?
+  created_at    DateTime @default(now())
+
+  routine  Routine              @relation(fields: [routine_id], references: [routine_id])
+  products RoutineStepProduct[]
+}
+
+model Product {
+  product_id  Int                  @id @default(autoincrement())
+  name        String
+  description String
+  type        String
+  created_at  DateTime             @default(now())
+  updated_at  DateTime             @updatedAt
+  steps       RoutineStepProduct[]
+}
+
+model RoutineStepProduct {
+  step_id    Int
+  product_id Int
+  created_at DateTime @default(now())
+
+  step    RoutineStep @relation(fields: [step_id], references: [step_id])
+  product Product     @relation(fields: [product_id], references: [product_id])
+
+  @@id([step_id, product_id])
+}
+
+model RoutineEngagement {
+  engagement_id  Int      @id @default(autoincrement())
+  user_id        Int
+  routine_id     Int
+  week_number    Int // Current week of engagement
+  current_streak Int      @default(0) // Tracks current streak of completed events
+  longest_streak Int      @default(0) // Tracks the longest streak achieved
+  completed      Boolean  @default(false) // Tracks whether the engagement is completed
+  created_at     DateTime @default(now())
+
+  user            User            @relation(fields: [user_id], references: [user_id])
+  routine         Routine         @relation(fields: [routine_id], references: [routine_id])
+  dailyActivities DailyActivity[]
+
+  @@unique([user_id, routine_id]) // Ensure one engagement per user-routine pair
+}
+
+model DailyEvent {
+  event_id    Int      @id @default(autoincrement())
+  routine_id  Int // Reference to the Routine
+  week_number Int // Week of the routine
+  day_number  Int // Day within the week
+  event       String // Specific event details
+  created_at  DateTime @default(now())
+
+  routine         Routine         @relation(fields: [routine_id], references: [routine_id]) // Relation to Routine
+  dailyActivities DailyActivity[] // Add this field for the relation with DailyActivity
+
+  @@unique([routine_id, week_number, day_number]) // Ensure unique events per day for a routine
+}
+
+model DailyActivity {
+  activity_id   Int       @id @default(autoincrement())
+  engagement_id Int // Reference to the RoutineEngagement
+  event_id      Int // Link to the DailyEvent
+  completed     Boolean   @default(false) // Tracks whether the user completed the event
+  completed_at  DateTime? // Optional, tracks the time of completion
+  created_at    DateTime  @default(now())
+
+  engagement RoutineEngagement @relation(fields: [engagement_id], references: [engagement_id])
+  event      DailyEvent        @relation(fields: [event_id], references: [event_id]) // Relation to DailyEvent
+
+  @@unique([engagement_id, event_id]) // Ensure one activity per engagement-event pair
+}
+
+model Analytics {
+  analytics_id         Int      @id @default(autoincrement())
+  routine_id           Int      @unique
+  total_completions    Int
+  avg_completion_rate  Float
+  popular_routine_rank Int
+  created_at           DateTime @default(now())
+
+  routine Routine @relation(fields: [routine_id], references: [routine_id])
+}
